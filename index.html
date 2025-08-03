@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Рулетка с плавной остановкой и прыгающим шариком</title>
+<style>
+  body {
+    margin: 0;
+    background: #0a1a2a;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #eee;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+  }
+  #game {
+    display: flex;
+    flex-direction: column; /* Изменено с row на column */
+    align-items: center;    /* Центрируем по горизонтали */
+    gap: 20px;
+  }
+  #canvas-container {
+    position: relative;
+    width: 450px;
+    height: 450px;
+    user-select: none;
+  }
+  canvas {
+    background: radial-gradient(circle at center, #552a00 40%, #2a1500 90%);
+    border-radius: 50%;
+    box-shadow:
+      inset 0 0 50px #a36a00,
+      0 0 30px #a36a00;
+    display: block;
+  }
+  #table {
+    background: #0b3d0b;
+    border-radius: 10px;
+    padding: 15px;
+    width: 480px;
+    box-shadow: 0 0 20px #144214;
+    display: flex;
+    flex-direction: column;
+  }
+  #table-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 35px);
+    grid-template-rows: repeat(3, 50px);
+    gap: 2px;
+    margin-bottom: 10px;
+    user-select: none;
+  }
+  .cell {
+    border-radius: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    color: white;
+    border: 1px solid #222;
+    transition: background-color 0.3s ease;
+    position: relative;
+  }
+  .red {
+    background: #b22222;
+  }
+  .black {
+    background: #111;
+  }
+  .green {
+    background: #006400;
+  }
+  .cell.selected {
+    outline: 3px solid yellow;
+    z-index: 10;
+  }
+  #zero-cell {
+    grid-column: 1 / 2;
+    grid-row: 1 / 4;
+    background: #006400;
+    font-size: 20px;
+  }
+  #info {
+    margin-top: 10px;
+    font-size: 18px;
+  }
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+  button {
+    background: #144214;
+    border: 1px solid #0a2a0a;
+    color: white;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+  }
+  button:hover:not(:disabled) {
+    background: #1e6f1e;
+  }
+  button:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
+  #bet-input {
+    width: 80px;
+    padding: 6px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #0a2a0a;
+    text-align: right;
+  }
+  #result {
+    margin-top: 15px;
+    font-size: 20px;
+    font-weight: 700;
+    min-height: 28px;
+    min-width: 240px;
+  }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="canvas-container">
+    <canvas id="roulette-canvas" width="450" height="450"></canvas>
+  </div>
+
+  <div id="table">
+    <div id="table-grid"></div>
+    <div>
+      Ставка: <input id="bet-input" type="number" min="1" value="10" step="1" /> €
+    </div>
+    <div id="controls">
+      <button id="spin-btn" disabled>Вращать</button>
+      <button id="clear-btn">Сбросить ставки</button>
+    </div>
+    <div id="result"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const numbers = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34,
+    6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
+    24, 16, 33, 1, 20, 14, 31, 9, 22, 18,
+    29, 7, 28, 12, 35, 3, 26
+  ];
+  const redNumbers = new Set([
+    32, 19, 21, 25, 34, 27, 36, 30,
+    23, 5, 16, 1, 14, 9, 18, 7, 12, 3
+  ]);
+  const blackNumbers = new Set(numbers.filter(n => n !== 0 && !redNumbers.has(n)));
+
+  // Canvas setup
+  const canvas = document.getElementById('roulette-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W/2;
+  const cy = H/2;
+  const outerRadius = 200;
+  const innerRadius = 120;
+  const ballRadius = 10;
+
+  const totalSegments = numbers.length;
+  const anglePerSegment = 2 * Math.PI / totalSegments;
+
+  // Bets
+  const tableGrid = document.getElementById('table-grid');
+  const spinBtn = document.getElementById('spin-btn');
+  const clearBtn = document.getElementById('clear-btn');
+  const betInput = document.getElementById('bet-input');
+  const resultDiv = document.getElementById('result');
+
+  let bets = new Map();
+
+  // Create table grid
+  const zeroCell = document.createElement('div');
+  zeroCell.classList.add('cell', 'green');
+  zeroCell.id = 'zero-cell';
+  zeroCell.textContent = '0';
+  zeroCell.style.gridRow = '1 / 4';
+  zeroCell.style.gridColumn = '1 / 2';
+  tableGrid.appendChild(zeroCell);
+
+  for(let row=0; row<3; row++) {
+    for(let col=0; col<12; col++) {
+      const num = row * 12 + col + 1;
+      const cell = document.createElement('div');
+      cell.classList.add('cell');
+      cell.textContent = num;
+
+      if(redNumbers.has(num)) {
+        cell.classList.add('red');
+      } else {
+        cell.classList.add('black');
+      }
+      cell.style.gridColumn = (col + 2);
+      cell.style.gridRow = (row + 1);
+
+      cell.addEventListener('click', () => {
+        if(spinning) return;
+        if(bets.has(num)) {
+          bets.delete(num);
+          cell.classList.remove('selected');
+        } else {
+          bets.set(num, Number(betInput.value) || 1);
+          cell.classList.add('selected');
+        }
+        updateSpinButton();
+        updateResult('');
+      });
+
+      tableGrid.appendChild(cell);
+    }
+  }
+
+  zeroCell.addEventListener('click', () => {
+    if(spinning) return;
+    if(bets.has(0)) {
+      bets.delete(0);
+      zeroCell.classList.remove('selected');
+    } else {
+      bets.set(0, Number(betInput.value) || 1);
+      zeroCell.classList.add('selected');
+    }
+    updateSpinButton();
+    updateResult('');
+  });
+
+  function updateSpinButton() {
+    spinBtn.disabled = bets.size === 0;
+  }
+
+  clearBtn.addEventListener('click', () => {
+    if(spinning) return;
+    bets.clear();
+    document.querySelectorAll('.cell.selected').forEach(el => el.classList.remove('selected'));
+    updateSpinButton();
+    updateResult('');
+  });
+
+  function updateResult(text) {
+    resultDiv.textContent = text;
+  }
+
+  // Draw wheel with 3D effect
+  function drawWheel(rotation) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw outer circle shading
+    const gradientOuter = ctx.createRadialGradient(cx, cy, outerRadius*0.7, cx, cy, outerRadius);
+    gradientOuter.addColorStop(0, '#6b3e00');
+    gradientOuter.addColorStop(1, '#2a1500');
+    ctx.fillStyle = gradientOuter;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerRadius+10, 0, 2*Math.PI);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
+
+    for(let i=0; i<totalSegments; i++) {
+      const startAngle = i * anglePerSegment;
+      const endAngle = startAngle + anglePerSegment;
+      const num = numbers[i];
+
+      // Sector color
+      if(num === 0) {
+        ctx.fillStyle = '#006400';
+      } else if(redNumbers.has(num)) {
+        ctx.fillStyle = '#b22222';
+      } else {
+        ctx.fillStyle = '#111';
+      }
+
+      // Draw sector
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0, outerRadius, startAngle, endAngle, false);
+      ctx.lineTo(0,0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw inner circle to create ring
+      ctx.fillStyle = '#0a1a2a';
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0, innerRadius, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw number text
+      ctx.save();
+      const textAngle = startAngle + anglePerSegment/2;
+      ctx.rotate(textAngle);
+      ctx.translate(innerRadius + (outerRadius - innerRadius)/2, 0);
+      ctx.rotate(Math.PI/2);
+      ctx.fillStyle = num === 0 ? '#a0dfa0' : redNumbers.has(num) ? '#ff6666' : '#dddcdc';
+      ctx.font = 'bold 20px Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(num, 0, 0);
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // Draw center circle (hub)
+    const gradientCenter = ctx.createRadialGradient(cx, cy, 10, cx, cy, 40);
+    gradientCenter.addColorStop(0, '#ffda79');
+    gradientCenter.addColorStop(1, '#a67c00');
+    ctx.fillStyle = gradientCenter;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, 2*Math.PI);
+    ctx.fill();
+
+    // Draw ring around center
+    ctx.strokeStyle = '#a67c00';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, 2*Math.PI);
+    ctx.stroke();
+  }
+
+  // Функция рисования шарика
+  function drawBall(wheelRotation, ballAngle, timestamp) {
+    // Подпрыгивание шарика по радиусу
+    const bounceRadius = innerRadius + (outerRadius - innerRadius) / 2 * (1 + Math.sin(timestamp * 0.01));
+    const angle = wheelRotation + ballAngle;
+    const x = cx + bounceRadius * Math.cos(angle);
+    const y = cy + bounceRadius * Math.sin(angle);
+
+    ctx.shadowColor = 'rgba(255,255,255,0.8)';
+    ctx.shadowBlur = 8;
+    const gradientBall = ctx.createRadialGradient(x - 3, y - 3, 2, x, y, ballRadius);
+    gradientBall.addColorStop(0, '#fff');
+    gradientBall.addColorStop(1, '#999');
+    ctx.fillStyle = gradientBall;
+    ctx.beginPath();
+    ctx.arc(x, y, ballRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // --- Анимация вращения ---
+
+  let spinning = false;
+  let currentWheelRotation = 0;
+  let currentWheelSpeed = 0;
+  let ballAngle = 0;
+  let ballSpeed = 0;
+  let spinStartTime = 0;
+
+  // Получить номер по углу шарика
+  function getNumberByBallAngle(wheelRotation, ballAngle) {
+    let angle = (wheelRotation + ballAngle) % (2 * Math.PI);
+    if (angle < 0) angle += 2 * Math.PI;
+
+    const zeroAngle = 3/2 * Math.PI; // сектор 0 сверху
+    let shiftedAngle = (zeroAngle - angle + 2 * Math.PI) % (2 * Math.PI);
+
+    const index = Math.floor(shiftedAngle / anglePerSegment);
+    return numbers[index];
+  }
+
+  function animate(timestamp) {
+    if(!spinStartTime) spinStartTime = timestamp;
+    if(!spinning) return;
+
+    currentWheelRotation += currentWheelSpeed;
+    ballAngle += ballSpeed;
+
+    // Плавное замедление
+    currentWheelSpeed *= 0.993;
+    ballSpeed *= 0.993;
+
+    drawWheel(currentWheelRotation);
+    drawBall(currentWheelRotation, ballAngle, timestamp);
+
+    if(currentWheelSpeed < 0.002 && ballSpeed < 0.002) {
+      spinning = false;
+      spinBtn.disabled = false;
+      clearBtn.disabled = false;
+      betInput.disabled = false;
+
+      const resultNumber = getNumberByBallAngle(currentWheelRotation, ballAngle);
+      showResult(resultNumber);
+      return;
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  function showResult(number) {
+    updateResult(`Выпало число: ${number} (${redNumbers.has(number) ? 'красное' : number === 0 ? 'зелёное' : 'чёрное'})`);
+
+    let totalBet = 0;
+    let winAmount = 0;
+    bets.forEach((amount, num) => {
+      totalBet += amount;
+      if(num === number) {
+        winAmount += amount * 35;
+      }
+    });
+
+    if(winAmount > 0) {
+      updateResult(`Выпало число: ${number}. Поздравляем! Ваш выигрыш: ${winAmount} € (ставка: ${totalBet} €)`);
+    } else {
+      updateResult(`Выпало число: ${number}. К сожалению, вы проиграли. Ставка: ${totalBet} €`);
+    }
+
+    bets.clear();
+    document.querySelectorAll('.cell.selected').forEach(el => el.classList.remove('selected'));
+    updateSpinButton();
+  }
+
+  spinBtn.addEventListener('click', () => {
+    if(spinning || bets.size === 0) return;
+
+    spinning = true;
+    spinBtn.disabled = true;
+    clearBtn.disabled = true;
+    betInput.disabled = true;
+    updateResult('Вращаем...');
+
+    currentWheelSpeed = 0.5 + Math.random() * 0.3; // скорость вращения колеса (рад/фрейм)
+    ballSpeed = currentWheelSpeed * 3 + 0.1;       // скорость шарика
+
+    spinStartTime = 0;
+
+    requestAnimationFrame(animate);
+  });
+
+  updateSpinButton();
+  drawWheel(0);
+  // Начальное положение шарика - по центру радиуса
+  const initialTimestamp = performance.now();
+  (function initialBall() {
+    drawWheel(0);
+    drawBall(0, 0, initialTimestamp);
+  })();
+
+})();
+</script>
+
+</body>
+</html>
