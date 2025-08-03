@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Рулетка с плавной остановкой и прыгающим шариком</title>
+<title>Рулетка с вынесенным зелёным полем 0</title>
 <style>
   body {
     margin: 0;
@@ -20,56 +20,85 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     width: 100%;
     max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: 20px;
   }
   #canvas-container {
-    position: relative;
     width: 100%;
     max-width: 450px;
     aspect-ratio: 1 / 1;
     user-select: none;
+    margin: 0 auto;
   }
   canvas {
     width: 100%;
     height: auto;
-    background: radial-gradient(circle at center, #552a00 40%, #2a1500 90%);
+    display: block;
+    margin: 0 auto;
     border-radius: 50%;
     box-shadow:
       inset 0 0 50px #a36a00,
       0 0 30px #a36a00;
-    display: block;
   }
+  /* Таблица ставок с отдельным полем 0 */
   #table {
     background: #0b3d0b;
     border-radius: 10px;
-    padding: 15px;
+    padding: 10px 8px;
     width: 100%;
+    max-width: 450px;
     box-shadow: 0 0 20px #144214;
     display: flex;
-    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
   }
-  #table-grid {
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    grid-template-rows: repeat(3, 50px);
-    gap: 2px;
-    margin-bottom: 10px;
-    user-select: none;
-  }
-  .cell {
-    border-radius: 4px;
+  #zero-cell {
+    flex-shrink: 0;
+    width: 48px;
+    background: #006400;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 18px;
+    color: white;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight: 700;
-    font-size: 16px;
     cursor: pointer;
-    color: white;
+    user-select: none;
+    box-shadow: 0 0 8px #0a5a0a inset;
+    transition: outline 0.2s ease;
+  }
+  #zero-cell.selected {
+    outline: 3px solid yellow;
+    box-shadow: 0 0 12px yellow inset;
+  }
+  #table-grid {
+    overflow-y: auto;
+    max-height: 180px;
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(3, 36px);
+    gap: 1px;
+    user-select: none;
+  }
+  .cell {
+    font-size: 14px;
+    line-height: 36px;
+    cursor: pointer;
+    border-radius: 3px;
     border: 1px solid #222;
-    transition: background-color 0.3s ease;
-    position: relative;
+    text-align: center;
+    font-weight: 700;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    transition: outline 0.2s ease;
   }
   .red {
     background: #b22222;
@@ -77,40 +106,49 @@
   .black {
     background: #111;
   }
-  .green {
-    background: #006400;
-  }
   .cell.selected {
     outline: 3px solid yellow;
+    box-shadow: 0 0 10px yellow inset;
     z-index: 10;
   }
-  #zero-cell {
-    grid-column: 1 / 2;
-    grid-row: 1 / 4;
-    background: #006400;
-    font-size: 20px;
+  #bet-container {
+    margin-top: 8px;
+    width: 100%;
+    max-width: 450px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
   }
-  #info {
-    margin-top: 10px;
-    font-size: 18px;
+  #bet-input {
+    width: 70px;
+    font-size: 14px;
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #0a2a0a;
+    text-align: right;
   }
   #controls {
     margin-top: 10px;
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 450px;
   }
   button {
+    flex: 1 1 45%;
+    min-width: 100px;
+    font-size: 14px;
+    padding: 8px 0;
+    border-radius: 6px;
     background: #144214;
     border: 1px solid #0a2a0a;
     color: white;
     font-weight: 700;
-    padding: 8px 16px;
-    border-radius: 6px;
     cursor: pointer;
     transition: background-color 0.25s ease;
-    flex: 1 1 120px;
-    min-width: 100px;
   }
   button:hover:not(:disabled) {
     background: #1e6f1e;
@@ -119,51 +157,39 @@
     background: #555;
     cursor: not-allowed;
   }
-  #bet-input {
-    width: 80px;
-    padding: 6px;
-    font-size: 16px;
-    border-radius: 6px;
-    border: 1px solid #0a2a0a;
-    text-align: right;
-  }
   #result {
     margin-top: 15px;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     min-height: 28px;
     min-width: 240px;
+    text-align: center;
   }
 
-  /* Мобильная версия */
   @media (max-width: 480px) {
     #table-grid {
-      grid-template-columns: repeat(12, 1fr);
-      grid-template-rows: repeat(3, 40px);
-      gap: 1px;
+      grid-template-rows: repeat(3, 32px);
     }
     .cell {
-      font-size: 14px;
-      border-width: 1px;
+      font-size: 12px;
+      line-height: 32px;
     }
     #zero-cell {
-      font-size: 18px;
+      font-size: 16px;
+      width: 44px;
     }
     #bet-input {
       width: 60px;
-      font-size: 14px;
+      font-size: 12px;
+    }
+    button {
+      font-size: 12px;
+      min-width: 90px;
     }
     #result {
       font-size: 16px;
       min-width: auto;
-    }
-    #controls {
-      gap: 8px;
-    }
-    button {
-      padding: 6px 12px;
-      flex: 1 1 100px;
-      font-size: 14px;
+      padding: 0 5px;
     }
   }
 </style>
@@ -176,16 +202,22 @@
   </div>
 
   <div id="table">
+    <div id="zero-cell">0</div>
     <div id="table-grid"></div>
-    <div>
-      Ставка: <input id="bet-input" type="number" min="1" value="10" step="1" /> €
-    </div>
-    <div id="controls">
-      <button id="spin-btn" disabled>Вращать</button>
-      <button id="clear-btn">Сбросить ставки</button>
-    </div>
-    <div id="result"></div>
   </div>
+
+  <div id="bet-container">
+    <label for="bet-input">Ставка:</label>
+    <input id="bet-input" type="number" min="1" value="10" step="1" />
+    <span>€</span>
+  </div>
+
+  <div id="controls">
+    <button id="spin-btn" disabled>Вращать</button>
+    <button id="clear-btn">Сбросить ставки</button>
+  </div>
+
+  <div id="result"></div>
 </div>
 
 <script>
@@ -202,11 +234,10 @@
   ]);
   const blackNumbers = new Set(numbers.filter(n => n !== 0 && !redNumbers.has(n)));
 
-  // Canvas setup
   const canvas = document.getElementById('roulette-canvas');
   const ctx = canvas.getContext('2d');
 
-  const baseSize = 450; // базовый размер для отрисовки
+  const baseSize = 450;
   let scale = 1;
 
   function resizeCanvas() {
@@ -234,8 +265,8 @@
   const totalSegments = numbers.length;
   const anglePerSegment = 2 * Math.PI / totalSegments;
 
-  // Bets
   const tableGrid = document.getElementById('table-grid');
+  const zeroCell = document.getElementById('zero-cell');
   const spinBtn = document.getElementById('spin-btn');
   const clearBtn = document.getElementById('clear-btn');
   const betInput = document.getElementById('bet-input');
@@ -243,15 +274,7 @@
 
   let bets = new Map();
 
-  // Create table grid
-  const zeroCell = document.createElement('div');
-  zeroCell.classList.add('cell', 'green');
-  zeroCell.id = 'zero-cell';
-  zeroCell.textContent = '0';
-  zeroCell.style.gridRow = '1 / 4';
-  zeroCell.style.gridColumn = '1 / 2';
-  tableGrid.appendChild(zeroCell);
-
+  // Создаём ячейки 1–36 в table-grid
   for(let row=0; row<3; row++) {
     for(let col=0; col<12; col++) {
       const num = row * 12 + col + 1;
@@ -264,8 +287,7 @@
       } else {
         cell.classList.add('black');
       }
-      cell.style.gridColumn = (col + 2);
-      cell.style.gridRow = (row + 1);
+      // grid-auto-placement, так что не нужно явно ставить grid-row/column
 
       cell.addEventListener('click', () => {
         if(spinning) return;
@@ -305,6 +327,7 @@
     if(spinning) return;
     bets.clear();
     document.querySelectorAll('.cell.selected').forEach(el => el.classList.remove('selected'));
+    zeroCell.classList.remove('selected');
     updateSpinButton();
     updateResult('');
   });
@@ -313,13 +336,12 @@
     resultDiv.textContent = text;
   }
 
-  // Draw wheel with 3D effect
   function drawWheel(rotation) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.scale(scale, scale);
 
-    // Draw outer circle shading
+    // Внешний круг с градиентом
     const gradientOuter = ctx.createRadialGradient(cx, cy, outerRadius*0.7, cx, cy, outerRadius);
     gradientOuter.addColorStop(0, '#6b3e00');
     gradientOuter.addColorStop(1, '#2a1500');
@@ -336,7 +358,6 @@
       const endAngle = startAngle + anglePerSegment;
       const num = numbers[i];
 
-      // Sector color
       if(num === 0) {
         ctx.fillStyle = '#006400';
       } else if(redNumbers.has(num)) {
@@ -345,7 +366,6 @@
         ctx.fillStyle = '#111';
       }
 
-      // Draw sector
       ctx.beginPath();
       ctx.moveTo(0,0);
       ctx.arc(0,0, outerRadius, startAngle, endAngle, false);
@@ -353,7 +373,7 @@
       ctx.closePath();
       ctx.fill();
 
-      // Draw inner circle to create ring
+      // Внутренний круг для кольца
       ctx.fillStyle = '#0a1a2a';
       ctx.beginPath();
       ctx.moveTo(0,0);
@@ -361,7 +381,7 @@
       ctx.closePath();
       ctx.fill();
 
-      // Draw number text
+      // Текст номера
       ctx.save();
       const textAngle = startAngle + anglePerSegment/2;
       ctx.rotate(textAngle);
@@ -375,9 +395,9 @@
       ctx.restore();
     }
 
-    ctx.resetTransform(); // сброс трансформаций, чтобы нарисовать центр
+    ctx.resetTransform();
 
-    // Draw center circle (hub)
+    // Центр колеса
     const gradientCenter = ctx.createRadialGradient(cx, cy, 10, cx, cy, 40);
     gradientCenter.addColorStop(0, '#ffda79');
     gradientCenter.addColorStop(1, '#a67c00');
@@ -386,7 +406,6 @@
     ctx.arc(cx, cy, 40, 0, 2*Math.PI);
     ctx.fill();
 
-    // Draw ring around center
     ctx.strokeStyle = '#a67c00';
     ctx.lineWidth = 6;
     ctx.beginPath();
@@ -396,12 +415,10 @@
     ctx.restore();
   }
 
-  // Функция рисования шарика
   function drawBall(wheelRotation, ballAngle, timestamp) {
     ctx.save();
     ctx.scale(scale, scale);
 
-    // Подпрыгивание шарика по радиусу
     const bounceRadius = innerRadius + (outerRadius - innerRadius) / 2 * (1 + Math.sin(timestamp * 0.01));
     const angle = wheelRotation + ballAngle;
     const x = cx + bounceRadius * Math.cos(angle);
@@ -421,8 +438,6 @@
     ctx.restore();
   }
 
-  // --- Анимация вращения ---
-
   let spinning = false;
   let currentWheelRotation = 0;
   let currentWheelSpeed = 0;
@@ -430,12 +445,11 @@
   let ballSpeed = 0;
   let spinStartTime = 0;
 
-  // Получить номер по углу шарика
   function getNumberByBallAngle(wheelRotation, ballAngle) {
     let angle = (wheelRotation + ballAngle) % (2 * Math.PI);
     if (angle < 0) angle += 2 * Math.PI;
 
-    const zeroAngle = 3/2 * Math.PI; // сектор 0 сверху
+    const zeroAngle = 3/2 * Math.PI;
     let shiftedAngle = (zeroAngle - angle + 2 * Math.PI) % (2 * Math.PI);
 
     const index = Math.floor(shiftedAngle / anglePerSegment);
@@ -449,7 +463,6 @@
     currentWheelRotation += currentWheelSpeed;
     ballAngle += ballSpeed;
 
-    // Плавное замедление
     currentWheelSpeed *= 0.993;
     ballSpeed *= 0.993;
 
@@ -490,6 +503,7 @@
 
     bets.clear();
     document.querySelectorAll('.cell.selected').forEach(el => el.classList.remove('selected'));
+    zeroCell.classList.remove('selected');
     updateSpinButton();
   }
 
@@ -502,8 +516,8 @@
     betInput.disabled = true;
     updateResult('Вращаем...');
 
-    currentWheelSpeed = 0.5 + Math.random() * 0.3; // скорость вращения колеса (рад/фрейм)
-    ballSpeed = currentWheelSpeed * 3 + 0.1;       // скорость шарика
+    currentWheelSpeed = 0.5 + Math.random() * 0.3;
+    ballSpeed = currentWheelSpeed * 3 + 0.1;
 
     spinStartTime = 0;
 
@@ -512,7 +526,6 @@
 
   updateSpinButton();
   drawWheel(0);
-  // Начальное положение шарика - по центру радиуса
   const initialTimestamp = performance.now();
   (function initialBall() {
     drawWheel(0);
