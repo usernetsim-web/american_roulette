@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Рулетка с плавной остановкой и прыгающим шариком</title>
 <style>
   body {
@@ -17,17 +18,22 @@
   }
   #game {
     display: flex;
-    flex-direction: column; /* Изменено с row на column */
-    align-items: center;    /* Центрируем по горизонтали */
+    flex-direction: column;
+    align-items: center;
     gap: 20px;
+    width: 100%;
+    max-width: 480px;
   }
   #canvas-container {
     position: relative;
-    width: 450px;
-    height: 450px;
+    width: 100%;
+    max-width: 450px;
+    aspect-ratio: 1 / 1;
     user-select: none;
   }
   canvas {
+    width: 100%;
+    height: auto;
     background: radial-gradient(circle at center, #552a00 40%, #2a1500 90%);
     border-radius: 50%;
     box-shadow:
@@ -39,14 +45,14 @@
     background: #0b3d0b;
     border-radius: 10px;
     padding: 15px;
-    width: 480px;
+    width: 100%;
     box-shadow: 0 0 20px #144214;
     display: flex;
     flex-direction: column;
   }
   #table-grid {
     display: grid;
-    grid-template-columns: repeat(12, 35px);
+    grid-template-columns: repeat(12, 1fr);
     grid-template-rows: repeat(3, 50px);
     gap: 2px;
     margin-bottom: 10px;
@@ -92,6 +98,7 @@
     margin-top: 10px;
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
   }
   button {
     background: #144214;
@@ -102,6 +109,8 @@
     border-radius: 6px;
     cursor: pointer;
     transition: background-color 0.25s ease;
+    flex: 1 1 120px;
+    min-width: 100px;
   }
   button:hover:not(:disabled) {
     background: #1e6f1e;
@@ -125,13 +134,45 @@
     min-height: 28px;
     min-width: 240px;
   }
+
+  /* Мобильная версия */
+  @media (max-width: 480px) {
+    #table-grid {
+      grid-template-columns: repeat(12, 1fr);
+      grid-template-rows: repeat(3, 40px);
+      gap: 1px;
+    }
+    .cell {
+      font-size: 14px;
+      border-width: 1px;
+    }
+    #zero-cell {
+      font-size: 18px;
+    }
+    #bet-input {
+      width: 60px;
+      font-size: 14px;
+    }
+    #result {
+      font-size: 16px;
+      min-width: auto;
+    }
+    #controls {
+      gap: 8px;
+    }
+    button {
+      padding: 6px 12px;
+      flex: 1 1 100px;
+      font-size: 14px;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div id="game">
   <div id="canvas-container">
-    <canvas id="roulette-canvas" width="450" height="450"></canvas>
+    <canvas id="roulette-canvas"></canvas>
   </div>
 
   <div id="table">
@@ -164,10 +205,28 @@
   // Canvas setup
   const canvas = document.getElementById('roulette-canvas');
   const ctx = canvas.getContext('2d');
-  const W = canvas.width;
-  const H = canvas.height;
-  const cx = W/2;
-  const cy = H/2;
+
+  const baseSize = 450; // базовый размер для отрисовки
+  let scale = 1;
+
+  function resizeCanvas() {
+    const containerWidth = canvas.parentElement.clientWidth;
+    scale = containerWidth / baseSize;
+    canvas.width = baseSize;
+    canvas.height = baseSize;
+    canvas.style.width = containerWidth + 'px';
+    canvas.style.height = containerWidth + 'px';
+  }
+
+  resizeCanvas();
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    drawWheel(currentWheelRotation);
+    drawBall(currentWheelRotation, ballAngle, performance.now());
+  });
+
+  const cx = baseSize / 2;
+  const cy = baseSize / 2;
   const outerRadius = 200;
   const innerRadius = 120;
   const ballRadius = 10;
@@ -256,7 +315,9 @@
 
   // Draw wheel with 3D effect
   function drawWheel(rotation) {
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(scale, scale);
 
     // Draw outer circle shading
     const gradientOuter = ctx.createRadialGradient(cx, cy, outerRadius*0.7, cx, cy, outerRadius);
@@ -267,7 +328,6 @@
     ctx.arc(cx, cy, outerRadius+10, 0, 2*Math.PI);
     ctx.fill();
 
-    ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rotation);
 
@@ -315,7 +375,7 @@
       ctx.restore();
     }
 
-    ctx.restore();
+    ctx.resetTransform(); // сброс трансформаций, чтобы нарисовать центр
 
     // Draw center circle (hub)
     const gradientCenter = ctx.createRadialGradient(cx, cy, 10, cx, cy, 40);
@@ -332,10 +392,15 @@
     ctx.beginPath();
     ctx.arc(cx, cy, 40, 0, 2*Math.PI);
     ctx.stroke();
+
+    ctx.restore();
   }
 
   // Функция рисования шарика
   function drawBall(wheelRotation, ballAngle, timestamp) {
+    ctx.save();
+    ctx.scale(scale, scale);
+
     // Подпрыгивание шарика по радиусу
     const bounceRadius = innerRadius + (outerRadius - innerRadius) / 2 * (1 + Math.sin(timestamp * 0.01));
     const angle = wheelRotation + ballAngle;
@@ -352,6 +417,8 @@
     ctx.arc(x, y, ballRadius, 0, 2 * Math.PI);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
   // --- Анимация вращения ---
